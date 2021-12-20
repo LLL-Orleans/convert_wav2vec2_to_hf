@@ -10,9 +10,9 @@ import sys
 from shutil import copyfile
 from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor, Wav2Vec2Model, Wav2Vec2CTCTokenizer, Wav2Vec2FeatureExtractor
 
-finetuned = bool(int(sys.argv[1]))
+hf_path = str(sys.argv[1])
 fairseq_wav2vec2_path = str(sys.argv[2])
-hf_path = str(sys.argv[3])
+finetuned = bool(int(sys.argv[3]))
 
 
 if finetuned:
