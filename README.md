@@ -30,6 +30,7 @@ git clone https://huggingface.co/<org_of_model>/<name_of_model>
 
 4. Push to hub
 ```
+huggingface-cli upload <your-org>/wav2vec2-MFE-0.5K-base </path/to/local/hf/repo>
 ```
 
 
