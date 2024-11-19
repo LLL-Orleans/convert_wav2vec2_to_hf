@@ -8,6 +8,7 @@ function hf-convert-usage
       echo -e "\t\t--size {base, large}";
       echo -e "\t\t[--dict </path/to/dict>]";
       echo -e "\t\t[--copy-fairseq-model]";
+      echo -e "\t\t[--conv-bias]";
     echo -e "\nAuthor: https://huggingface.co/patrickvonplaten (https://huggingface.co/HfSpeechUtils)";
     echo "Adaptation: William N. Havard <william.havard@gmail.com>";
     return 1;
@@ -21,10 +22,12 @@ function hf-convert
   declare dict;
   declare curPath;
   declare copyFairseqModel;
+  declare convBias;
 
   curPath=$(pwd);
   dict="0";
   copyFairseqModel=0;
+  convBias="False";  # Default to False
 
   if [[ $# -eq 0 ]]; then
       hf-convert-usage;
@@ -58,26 +61,27 @@ function hf-convert
           else
           dict="0";
           fi;;
+      --conv-bias) convBias="True"; shift 1;;
       --) shift; break;;
       -*) echo "Error: Invalid option: $1" 1>&2; hf-convert-usage; return 1;;
       *) echo "Error: Invalid option: $1" 1>&2; hf-convert-usage; return 1;;
     esac
   done
 
-  # Only copy is there is something to be copied
+  # Only copy if there is something to be copied
   if [[ dict -ne "0" ]]; then
     cp ${dict} ${curPath}/data/temp/dict.ltr.txt
   fi
 
-  # load a config that is equal to the config of the model you wish to convert
+  # Load a config that is equal to the config of the model you wish to convert
   mkdir -p ${hf_name}
-  python -c "from transformers import Wav2Vec2Config; config = Wav2Vec2Config.from_pretrained('facebook/wav2vec2-${size}'); config.save_pretrained('${hf_name}');"
+  python -c "from transformers import Wav2Vec2Config; config = Wav2Vec2Config.from_pretrained('facebook/wav2vec2-${size}'); config.conv_bias = ${convBias}; config.save_pretrained('${hf_name}');"
 
   if [[ dict -eq "0" ]]; then
-    # pretrained only
+    # Pretrained only
     python convert_wav2vec2_original_pytorch_checkpoint_to_pytorch.py --pytorch_dump_folder ${hf_name} --checkpoint_path ${ckpt} --config_path ${hf_name}/config.json --not_finetuned
   else
-    # fine-tuned
+    # Fine-tuned
     python convert_wav2vec2_original_pytorch_checkpoint_to_pytorch.py --pytorch_dump_folder ${hf_name} --checkpoint_path ${ckpt} --config_path ${hf_name}/config.json --dict_path ${curPath}/data/temp/dict.ltr.txt
   fi
 
@@ -87,3 +91,4 @@ function hf-convert
 }
 
 hf-convert "$@"
+
