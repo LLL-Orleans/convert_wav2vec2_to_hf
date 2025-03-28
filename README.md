@@ -7,7 +7,7 @@ This repository contains two scripts that convert a fairseq wav2vec2 checkpoint 
 
 1. Create a HF repo :
 ```
-huggingface-cli repo create <name_of_model> --organization <org_of_model>
+huggingface-cli repo create <model-name> --organization <org_of_model>
 git clone https://huggingface.co/<org_of_model>/<name_of_model>
 ```
 2. Convert the model
@@ -20,17 +20,17 @@ git clone https://huggingface.co/<org_of_model>/<name_of_model>
     [--copy-fairseq-model]
 ```
 
-3. Verify that models are equal
+3. Verify models behave equally
 ```
 ./run_forward.py \
     --hf-path </path/to/local/hf/repo> \
     --fairseq-path </path/to/fairseq/checkpoint> \
-    [--finetuned]
+    [--finetuned </path/to/dict>]
 ```
 
 4. Push to hub
 ```
-huggingface-cli upload <your-org>/wav2vec2-MFE-0.5K-base </path/to/local/hf/repo>
+huggingface-cli upload <your-org>/<your-model> </path/to/local/hf/repo>
 ```
 
 
@@ -42,8 +42,11 @@ huggingface-cli upload <your-org>/wav2vec2-MFE-0.5K-base </path/to/local/hf/repo
 * `wav2vec2.encoder.pos_conv_embed.conv.weight_g` to `wav2vec2.encoder.pos_conv_embed.conv.parametrizations.weight.original0`
 * `wav2vec2.encoder.pos_conv_embed.conv.weight_v` to `wav2vec2.encoder.pos_conv_embed.conv.parametrizations.weight.original1`
 
-The current version of script should (not tested) also be able to correctly handle old `weight_g`/`weight_v`. Beware, conversion of finetuned model was not tested with the current version of the script.
+The current version of script should (not tested) also be able to correctly handle old `weight_g`/`weight_v`. 
+Beware, conversion of finetuned model was only tested with a Base model and not a Large architecture (as of 28/03/2025).
 
 2. `sampling_rate` and `do_normalize` are both extracted from the fairseq's original configuration (e.g. `cfg['task']['sample_rate']`) instead of being guessed.
 
-3. Create `preprocessor_config.json` which the original didn't do for pre-trained (i.e. non-finetuned models)
+3. Creates `preprocessor_config.json` which the original didn't do for pre-trained (i.e. non-finetuned) models
+
+4. The `test_loss` function [run_forward.py](run_forward.py) was corrected (didn't work for Fairseq before)

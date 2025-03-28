@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# Base on the original code by Patrick von Platen
+# The modifications done by William N. Havard are distributed under the same license.
+#
 import datasets
 import fairseq
 import torch
@@ -10,6 +13,7 @@ import sys
 from shutil import copyfile
 from transformers import Wav2Vec2ForCTC, Wav2Vec2Processor, Wav2Vec2Model, Wav2Vec2CTCTokenizer, Wav2Vec2FeatureExtractor
 import fairseq
+from pathlib import Path
 
 
 def test_feature_extractor(hf_feat_extractor, fsq_feat_extract, example_wav):
@@ -43,12 +47,15 @@ def test_full_model(hf_model, fsq_model, example_wav, attention_mask):
     assert torch.allclose(hf_output, fsq_output, atol=1e-2)
 
 
-def test_loss(hf_model, fsq_model, example_wav, attention_mask, target, processor):
+def test_loss(hf_model, fsq_model, example_wav, attention_mask, target, processor, dict_path):
     from fairseq.criterions.ctc import CtcCriterion, CtcCriterionConfig
-    from fairseq.tasks.audio_pretraining import AudioPretrainingConfig, AudioPretrainingTask
-    audio_cfg = AudioPretrainingConfig(labels="ltr", data="./data")
-    task = AudioPretrainingTask.setup_task(audio_cfg)
+    from fairseq.tasks.audio_finetuning import AudioFinetuningConfig, AudioFinetuningTask
+    audio_cfg = AudioFinetuningConfig(labels="ltr", data=Path(dict_path).parent)
+    task = AudioFinetuningTask.setup_task(audio_cfg)
     ctc = CtcCriterion(CtcCriterionConfig(), task)
+    # WN: corrected indices of the Fairseq pad and eos tokens
+    ctc.pad_idx = processor.tokenizer.convert_tokens_to_ids([processor.tokenizer.pad_token])[0]
+    ctc.eos_idx = processor.tokenizer.convert_tokens_to_ids([processor.tokenizer.eos_token])[0]
     fsq_model.train()
 
     labels_dict = processor.tokenizer(target, padding="longest", return_tensors="pt")
@@ -65,18 +72,21 @@ def test_loss(hf_model, fsq_model, example_wav, attention_mask, target, processo
         "id": torch.zeros((1,)),
     }
 
-    loss, _, _ = ctc(fsq_model, sample)
+    # Fairseq : get loss and compute mean
+    loss, sample_size, logging_output = ctc(fsq_model, sample)
+    loss_fq_mean = loss / logging_output['ntokens']
 
+    # HF
     labels = labels_dict.attention_mask * labels + (1 - labels_dict.attention_mask) * -100
-
     hf_model.config.ctc_loss_reduction = "mean"
     hf_loss = hf_model(example_wav, attention_mask=attention_mask, labels=labels).loss
 
-    print("Fairseq Loss:", loss)
-    print("HuggingFace Loss:", hf_loss)
+    print(f"\tFairseq Loss: {loss_fq_mean} (raw loss = {loss}, ntokens = {logging_output['ntokens']})")
+    print(f"\tHuggingFace Loss: {hf_loss}")
 
 
 def test_all(example_wav, attention_mask, hf_model, model, finetuned, transcription, processor):
+    print("Feature extractor test:", end='\t')
     with torch.no_grad():
         if finetuned:
             test_feature_extractor(
@@ -88,6 +98,7 @@ def test_all(example_wav, attention_mask, hf_model, model, finetuned, transcript
             )
     print("Succeeded feature extractor test")
 
+    print("Full encoder test:", end='\t')
     with torch.no_grad():
         # IMPORTANT: It is assumed that layer_norm_first is FALSE
         # This is the case for `wav2vec_small_960h.pt`, but might not be for all models
@@ -103,9 +114,11 @@ def test_all(example_wav, attention_mask, hf_model, model, finetuned, transcript
             # IMPORTANT: It is assumed that layer_norm_first is FALSE
             # This is the case for `wav2vec_small_960h.pt`, but might not be for all models
             # Adapt if necessary
+            print("Full model test:", end='\t')
             test_full_model(hf_model, model, example_wav, attention_mask)
-            test_loss(hf_model, model, example_wav, attention_mask, transcription, processor)
-        print("Succeeded full model test")
+            print("Succeeded full model test")
+            print("Loss test:")
+            test_loss(hf_model, model, example_wav, attention_mask, transcription, processor, finetuned)
 
 
 def map_to_array(batch):
@@ -115,7 +128,8 @@ def map_to_array(batch):
 
 
 def map_to_array_mp3(batch, i):
-    speech_array, sr = sf.read(f"/home/patrick/hugging_face/add_wav2vec/common_voice/cv-corpus-6.1-2020-12-11/nl/converted/sample_{i}.wav")
+    speech_array, sr = sf.read(f"/home/patrick/hugging_face/add_wav2vec/common_voice/"
+                               f"cv-corpus-6.1-2020-12-11/nl/converted/sample_{i}.wav")
     batch["speech"] = speech_array
     batch["sampling_rate"] = sr
     return batch
@@ -130,7 +144,7 @@ def main(hf_path, fairseq_path, finetuned=False):
     if finetuned:
         processor = Wav2Vec2Processor.from_pretrained(hf_path)
         model, cfg, task = fairseq.checkpoint_utils.load_model_ensemble_and_task(
-            [fairseq_wav2vec2_path], arg_overrides={"data": "../add_wav2vec/data/temp"}
+            [fairseq_wav2vec2_path], arg_overrides={"data": "/".join(finetuned.split("/")[:-1])}
         )
         hf_model = Wav2Vec2ForCTC.from_pretrained(hf_path)
     else:
@@ -167,8 +181,9 @@ def _parse_args(argv):
                         help="Path to HF model")
     parser.add_argument("--fairseq-path", required=True, type=Path,
                         help="Path to Fairseq model")
-    parser.add_argument("--finetuned", required=False, action='store_true', default=False,
-                        help="Whether the model was finetuned or not.")
+    parser.add_argument("--finetuned", required=False, action='store', default=False,
+                        help="Whether the model was finetuned or not. "
+                             "If so, this argument expects the path to dict.ltr.txt.")
     parser.add_argument("-v", "--verbosity", action="count", default=0,
                         help="Controls output verbosity. Critical and error messages will always be displayed. "
                              "({})".format(', '.join(['{}: {}'.format(level, '-' + 'v' * i_level)
