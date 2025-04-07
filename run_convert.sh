@@ -95,11 +95,11 @@ function hf-convert {
         echo "Copied dictionary: $dict -> $curPath/data/temp/dict.ltr.txt"
     fi
 
-    # Load config
+    # Load config (safer to use LeBenchmark as we have the exact same architecture)
     python -c "from transformers import Wav2Vec2Config; \
-config = Wav2Vec2Config.from_pretrained('facebook/wav2vec2-${size}'); \
-config.conv_bias = ${convBias}; \
-config.save_pretrained('${hf_name}');"
+                config = Wav2Vec2Config.from_pretrained('LeBenchmark/wav2vec2-FR-7K-${size}'); \
+                config.conv_bias = ${convBias}; \
+                config.save_pretrained('${hf_name}');"
 
     # Convert checkpoint
     if [[ -n "$dict" ]]; then

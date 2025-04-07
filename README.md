@@ -36,14 +36,13 @@ huggingface-cli upload <your-org>/<your-model> </path/to/local/hf/repo>
 
 ## Changelog
 
-[convert_wav2vec2_original_pytorch_checkpoint_to_pytorch.py](convert_wav2vec2_original_pytorch_checkpoint_to_pytorch.py) (originally from official [huggingface /transformers](https://github.com/huggingface/transformers/blob/779bc360ff4f3965a1ac29fdc02c43db7ede08c0/src/transformers/models/wav2vec2/convert_wav2vec2_original_pytorch_checkpoint_to_pytorch.py#L4)) was modifier.
+[convert_wav2vec2_original_pytorch_checkpoint_to_pytorch.py](convert_wav2vec2_original_pytorch_checkpoint_to_pytorch.py) (originally from official [huggingface /transformers](https://github.com/huggingface/transformers/blob/779bc360ff4f3965a1ac29fdc02c43db7ede08c0/src/transformers/models/wav2vec2/convert_wav2vec2_original_pytorch_checkpoint_to_pytorch.py#L4)) was modified.
 
 1. It correctly remaps :
 * `wav2vec2.encoder.pos_conv_embed.conv.weight_g` to `wav2vec2.encoder.pos_conv_embed.conv.parametrizations.weight.original0`
 * `wav2vec2.encoder.pos_conv_embed.conv.weight_v` to `wav2vec2.encoder.pos_conv_embed.conv.parametrizations.weight.original1`
 
-The current version of script should (not tested) also be able to correctly handle old `weight_g`/`weight_v`. 
-Beware, conversion of finetuned model was only tested with a Base model and not a Large architecture (as of 28/03/2025).
+The current version of script should (not tested) also be able to correctly handle old `weight_g`/`weight_v`.
 
 2. `sampling_rate` and `do_normalize` are both extracted from the fairseq's original configuration (e.g. `cfg['task']['sample_rate']`) instead of being guessed.
 
